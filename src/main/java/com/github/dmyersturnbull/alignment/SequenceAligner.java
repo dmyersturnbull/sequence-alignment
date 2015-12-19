@@ -1,14 +1,34 @@
+/*
+   Copyright 2015 Douglas Myers-Turnbull
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ */
+
 package com.github.dmyersturnbull.alignment;
 
 import com.google.common.base.Preconditions;
 import org.biojava.nbio.alignment.Alignments;
 import org.biojava.nbio.alignment.SimpleGapPenalty;
+import org.biojava.nbio.alignment.SimpleSubstitutionMatrix;
 import org.biojava.nbio.alignment.SubstitutionMatrixHelper;
 import org.biojava.nbio.alignment.template.GapPenalty;
 import org.biojava.nbio.alignment.template.PairwiseSequenceAligner;
 import org.biojava.nbio.alignment.template.SequencePair;
 import org.biojava.nbio.alignment.template.SubstitutionMatrix;
 import org.biojava.nbio.core.sequence.DNASequence;
+import org.biojava.nbio.core.sequence.ProteinSequence;
+import org.biojava.nbio.core.sequence.compound.AmbiguityDNACompoundSet;
+import org.biojava.nbio.core.sequence.compound.AminoAcidCompound;
 import org.biojava.nbio.core.sequence.compound.NucleotideCompound;
 import org.biojava.nbio.core.sequence.template.AbstractSequence;
 import org.biojava.nbio.core.sequence.template.Compound;
@@ -16,6 +36,7 @@ import org.biojava.nbio.core.sequence.template.Compound;
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.Immutable;
+import javax.annotation.concurrent.NotThreadSafe;
 import javax.validation.constraints.Size;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
@@ -56,24 +77,21 @@ public class SequenceAligner<S extends AbstractSequence<C>, C extends Compound> 
 	private final Alignments.PairwiseSequenceAlignerType m_type;
 
 	@Nonnull
-	public static SequenceAligner<DNASequence, NucleotideCompound> withDefaultOptions(@Nonnull Alignments.PairwiseSequenceAlignerType type) {
-		return new SequenceAligner<>(new SimpleGapPenalty(sf_defaultGapOpenPenalty, sf_defaultGapExtensionPenalty), sf_defaultMatrix, type, DNASequence::new);
+	public static Builder<DNASequence, NucleotideCompound> dna(@Nonnull Alignments.PairwiseSequenceAlignerType type) {
+		return new Builder<>(SubstitutionMatrixHelper.getNuc4_4(), type, DNASequence::new);
 	}
 
-	public SequenceAligner(@Nonnull GapPenalty gapPenalty, @Nonnull SubstitutionMatrix<C> matrix,
-	                       @Nonnull Alignments.PairwiseSequenceAlignerType type, @Nonnull SequenceCreator<S> creator) {
-		m_gapPenalty = gapPenalty;
-		m_matrix = matrix;
-		m_type = type;
-		m_creator = s -> {
-			try {
-				return creator.create(s);
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-		};
+	@Nonnull
+	public static Builder<ProteinSequence, AminoAcidCompound> protein(@Nonnull Alignments.PairwiseSequenceAlignerType type) {
+		return new Builder<>(SubstitutionMatrixHelper.getBlosum62(), type, ProteinSequence::new);
 	}
 
+	public SequenceAligner(@Nonnull Builder<S, C> builder) {
+		m_gapPenalty = builder.m_gapPenalty;
+		m_matrix = builder.m_matrix;
+		m_type = builder.m_type;
+		m_creator = builder.m_creator;
+	}
 
 	public SequenceAlignmentWithPvalue<S, C> alignAndCalcPvalue(@Nonnegative int nSimulations, @Nonnull S a, @Nonnull S b) {
 		SequenceAlignment<S, C> alignment = align(a, b);
@@ -265,6 +283,58 @@ public class SequenceAligner<S extends AbstractSequence<C>, C extends Compound> 
 	@FunctionalInterface
 	public interface SequenceCreator<S> {
 		S create(@Nonnull String string) throws Exception;
+	}
+
+	@NotThreadSafe
+    public static class Builder<S extends AbstractSequence<C>, C extends Compound> {
+
+        private GapPenalty m_gapPenalty = new SimpleGapPenalty(11, 1);
+
+        private Function<String, S> m_creator;
+
+        private SubstitutionMatrix<C> m_matrix;
+        private Alignments.PairwiseSequenceAlignerType m_type;
+
+		public Builder(@Nonnull SubstitutionMatrix<C> matrix, @Nonnull Alignments.PairwiseSequenceAlignerType type, @Nonnull SequenceCreator<S> creator) {
+			m_matrix = matrix;
+			m_type = type;
+			m_creator = wrap(creator);
+		}
+
+		public Builder<S, C> setGapPenalty(@Nonnull GapPenalty gapPenalty) {
+			m_gapPenalty = gapPenalty;
+			return this;
+		}
+
+		public Builder<S, C> setCreator(@Nonnull SequenceCreator<S> creator) {
+			m_creator = wrap(creator);
+			return this;
+		}
+
+		public Builder<S, C> setMatrix(@Nonnull SubstitutionMatrix<C> matrix) {
+			m_matrix = matrix;
+			return this;
+		}
+
+		public Builder<S, C> setType(@Nonnull Alignments.PairwiseSequenceAlignerType type) {
+			m_type = type;
+			return this;
+		}
+
+		public SequenceAligner<S, C> build() {
+			return new SequenceAligner<>(this);
+		}
+
+		@Nonnull
+		private Function<String, S> wrap(@Nonnull SequenceCreator<S> creator) {
+			return s -> {
+				try {
+					return creator.create(s);
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			};
+		}
 	}
 
 }

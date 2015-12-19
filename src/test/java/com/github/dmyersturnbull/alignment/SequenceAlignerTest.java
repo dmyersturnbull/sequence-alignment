@@ -1,3 +1,19 @@
+/*
+   Copyright 2015 Douglas Myers-Turnbull
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ */
+
 package com.github.dmyersturnbull.alignment;
 
 import org.biojava.nbio.alignment.Alignments;
@@ -36,11 +52,11 @@ public class SequenceAlignerTest {
 	}
 
 	private static SequenceAligner<DNASequence, NucleotideCompound> getGlobalAligner() {
-		return new SequenceAligner<>(sf_gapPenalty, sf_matrix, Alignments.PairwiseSequenceAlignerType.GLOBAL, DNASequence::new);
+		return new SequenceAligner.Builder<>(sf_matrix, Alignments.PairwiseSequenceAlignerType.GLOBAL, DNASequence::new).setGapPenalty(sf_gapPenalty).build();
 	}
 
 	private static SequenceAligner<DNASequence, NucleotideCompound> getLocalAligner() {
-		return new SequenceAligner<>(sf_gapPenalty, sf_matrix, Alignments.PairwiseSequenceAlignerType.LOCAL, DNASequence::new);
+		return new SequenceAligner.Builder<>(sf_matrix, Alignments.PairwiseSequenceAlignerType.LOCAL, DNASequence::new).setGapPenalty(sf_gapPenalty).build();
 	}
 
 	@Test
@@ -75,13 +91,13 @@ public class SequenceAlignerTest {
 		assertEquals(1, alignment.getNInsertionOpensInB());
 	}
 
-	//	@Test // TODO Biojava is even more wrong
+	@Test // TODO Biojava is even more wrong
 	public void testAdjacentGaps() throws Exception {
 		DNASequence a = new DNASequence("AAATTT  CCCATTT".replaceAll(" ", ""));
 		DNASequence b = new DNASequence("AAA  GGGCCCATTT".replaceAll(" ", ""));
 		GapPenalty gapPenalty = new SimpleGapPenalty(0, 0);
 		@SuppressWarnings("unchecked")
-		SequenceAligner<DNASequence, NucleotideCompound> aligner = new SequenceAligner<>(gapPenalty, sf_matrix, Alignments.PairwiseSequenceAlignerType.GLOBAL, DNASequence::new);
+		SequenceAligner<DNASequence, NucleotideCompound> aligner = new SequenceAligner.Builder<>(sf_matrix, Alignments.PairwiseSequenceAlignerType.GLOBAL, DNASequence::new).setGapPenalty(gapPenalty).build();
 		int scoreA = aligner.align(a, b).getScore();
 		assertEquals(sf_m * "AAA".length() + sf_m * "CCCATTT".length() + 2 * sf_gop - 5 * sf_gep, scoreA);
 		int score = aligner.alignFast(a, b);
@@ -152,7 +168,7 @@ public class SequenceAlignerTest {
 		assertEquals(sf_m * "ACTACTACTACTACT".length() + sf_gop + "GGGGGGGGG".length() * sf_gep, score);
 	}
 
-	//	@Test // TODO
+	@Test // TODO
 	public void testAlignFastDeletionAtStartLocal() throws Exception {
 		DNASequence a = new DNASequence("GGGGGGGGGACTACTACTACTACT".trim());
 		DNASequence b = new DNASequence("         ACTACTACTACTACT".trim());
@@ -188,7 +204,7 @@ public class SequenceAlignerTest {
 		assertEquals(sf_m * "ACTACTACT".length() + sf_gop + 2 * sf_gep + sf_m * "ACTACTACT".length(), score);
 	}
 
-	//	@Test // TODO The score is one mismatch off
+	@Test // TODO The score is one mismatch off
 	public void testAlignFastHard() throws Exception {
 		DNASequence a = new DNASequence("CGTAT  ATATCGCGCGCGCGATATATATATCT TCTCTAAAAAAA".replaceAll(" ", ""));
 		DNASequence b = new DNASequence("GGTATATATATCGCGCGCACGAT TATATATCTCTCTCTAAAAAAA".replaceAll(" ", ""));
@@ -199,6 +215,11 @@ public class SequenceAlignerTest {
 		double expectedScore = sf_m * ("GTAT".length() + "ATATCGCGCGC".length() + "CGAT".length() +
 				"TATATATCT".length() + "TCTCTAAAAAAA".length()) - 2 * sf_m + 3 * sf_gop + 4 * sf_gep;
 		assertEquals(expectedScore, aligner.alignFast(a, b), 0);
+	}
+
+	@Test // TODO
+	public void testPvalue() {
+
 	}
 
 }
